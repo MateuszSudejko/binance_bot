@@ -1,61 +1,90 @@
+from typing import Final
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from trading import *
 import asyncio
 # from binance.enums import KLINE_INTERVAL_1MINUTE
 from datetime import datetime, timedelta
 from binance import Client, AsyncClient, BinanceSocketManager  # noqa
 # from binance.depthcache import DepthCacheManager, OptionsDepthCacheManager, ThreadedDepthCacheManager  # noqa
 
-
 # Set up the Binance API client
 api_key = ""
 api_secret = ""
 sync_client = Client(api_key=api_key, api_secret=api_secret)
 
+# Set up telegram bot api client
+TOKEN: Final = '5946095731:AAFCqUnhggStHcfs0hTJdvZFFox-a4uAPbU'
+BOT_USERNAME: Final = '@binance369_trade_bot'
 
-def get_wallet_value_difference(client):
-    # Get current wallet balance
-    account_info = client.get_account()
-    balances = account_info['balances']
-    wallet_value_now = sum(float(b['free']) + float(b['locked']) for b in balances)
 
-    # Get wallet balance at 2AM today
-    now = datetime.utcnow()
-    today = datetime(now.year, now.month, now.day)
-    timestamp_2am = int((today + timedelta(hours=2)).timestamp() * 1000)
-    klines = client.get_historical_klines('BTCUSDT', Client.KLINE_INTERVAL_1HOUR, f"{timestamp_2am}ms", f"{timestamp_2am + 1}ms")
-    close_price_2am = float(klines[0][4])
-    btc_balance_2am = float(next((b['free'] for b in balances if b['asset'] == 'BTC'), 0)) + float(next((b['locked'] for b in balances if b['asset'] == 'BTC'), 0))
-    wallet_value_2am = btc_balance_2am * close_price_2am
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text('Hello, here is your account update')
 
-    # Calculate difference and return result
-    difference = wallet_value_now - wallet_value_2am
-    return difference
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text('I can give no help')
+
+
+async def custom_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text('Custom command')
+
+
+async def result_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(f'You have earned/lost {get_wallet_value_difference(sync_client)}')
+
+
+def handle_response(text: str) -> str:
+    processed: str = text.lower()
+
+    if 'hello' in processed:
+        return 'hello'
+
+    return 'I do not have answer to that'
+
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message_type: str = update.message.chat.type
+    text: str = update.message.text
+
+    print(f'User ({update.message.chat.id}) in {message_type}: "{text}"')
+
+    if message_type == 'group':
+        if BOT_USERNAME in text:
+            new_text: str = text.replace(BOT_USERNAME, '').strip()
+            response: str = handle_response(new_text)
+        else:
+            return
+    else:
+        response: handle_response(text)
+
+
+async def error(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print(f'Update {update} cause error {context.error}')
 
 
 async def main():
-    client = await AsyncClient.create()
-    bm = BinanceSocketManager(client)
-    print(get_wallet_value_difference(client))
-    # start any sockets here, i.e a trade socket
-    ts = bm.symbol_ticker_futures_socket('BTCUSDT')
-    # then start receiving messages
-    async with ts as tscm:
-        while True:
-            res = await tscm.recv()
-            price = res['data']['b']
-            print(price)
-            if float(price) < 27150.0:
-                sync_client.futures_create_order(
-                    symbol='BTCUSDT',
-                    side=Client.SIDE_SELL,
-                    type=Client.ORDER_TYPE_MARKET,
-                    quantity=0.001
-                )
-                print("doing transaction")
-                break
+    print('Should I start trading? (Y/n)')
+    if input() == 'Y':
+        await trading_loop()
 
-    await client.close_connection()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
+    print('Starting bot...')
+    app = Application.builder().token(TOKEN).build()
 
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    app.add_handler(CommandHandler('start', start_command))
+    app.add_handler(CommandHandler('help', help_command))
+    app.add_handler(CommandHandler('custom', custom_command))
+    app.add_handler(CommandHandler('result', result_command))
+
+    app.add_handler(MessageHandler(filters.TEXT, handle_message))
+
+    app.add_error_handler(error)
+
+    print('Polling...')
+
+    asyncio.run(main())
+
+    app.run_polling(poll_interval=1)
+
