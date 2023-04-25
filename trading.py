@@ -11,7 +11,7 @@ api_secret = ""
 sync_client = Client(api_key=api_key, api_secret=api_secret)
 
 
-async def get_wallet_value_difference(client):
+def get_wallet_value_difference(client):
     # Get current wallet balance
     account_info = client.get_account()
     balances = account_info['balances']

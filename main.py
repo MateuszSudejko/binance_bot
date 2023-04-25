@@ -84,7 +84,7 @@ if __name__ == '__main__':
 
     print('Polling...')
 
-    asyncio.run(main())
+    # asyncio.run(main())
 
     app.run_polling(poll_interval=1)
 
