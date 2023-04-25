@@ -14,8 +14,8 @@ api_secret = ""
 sync_client = Client(api_key=api_key, api_secret=api_secret)
 
 # Set up telegram bot api client
-TOKEN: Final = '5946095731:AAFCqUnhggStHcfs0hTJdvZFFox-a4uAPbU'
-BOT_USERNAME: Final = '@binance369_trade_bot'
+TOKEN: Final = ''
+BOT_USERNAME: Final = ''
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
