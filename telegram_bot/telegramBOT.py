@@ -1,66 +1,18 @@
-import asyncio
-import json
-from binance import AsyncClient, DepthCacheManager, BinanceSocketManager, OptionsDepthCacheManager
-from binance import ThreadedWebsocketManager, ThreadedDepthCacheManager
-from trading import *
-from binance import Client
 from typing import Final
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 
-with open('keys.txt', 'r') as file:
+with open('../keys.txt', 'r') as file:
     # Read the entire contents of the file into a variable
     file_contents = file.read()
     keys = file_contents.split('\n')
 
-# Set up telegram bot api client
+# Set up telegram_bot bot api client
 TOKEN: Final = keys[0]
 BOT_USERNAME: Final = keys[1]
 app = Application.builder().token(TOKEN).build()
 user_name = keys[4]
-
-# Set up the Binance API client
-api_key = keys[2]
-api_secret = keys[3]
-client = Client(api_key=api_key, api_secret=api_secret)
-#wallet_value_2am = get_wallet_value_from_2am(client)
-
-# get market depth
-#depth = client.get_order_book(symbol='BNBBTC')
-
-# place a test market buy order, to place an actual order use the create_order function
-#order = client.create_test_order(
-#    symbol='BNBBTC',
-#    side=Client.SIDE_BUY,
-#    type=Client.ORDER_TYPE_MARKET,
-#    quantity=100)
-
-# get all symbol prices
-#prices = client.get_all_tickers()
-
-# withdraw 100 ETH
-# check docs for assumptions around withdrawals
-#from binance.exceptions import BinanceAPIException
-
-#try:
-#    result = client.withdraw(
-#        asset='ETH',
-#        address='<eth_address>',
-#        amount=100)
-#except BinanceAPIException as e:
-#    print(e)
-#else:
-#    print("Success")
-
-# fetch list of withdrawals
-#withdraws = client.get_withdraw_history()
-
-# fetch list of ETH withdrawals
-#eth_withdraws = client.get_withdraw_history(coin='ETH')
-
-# get a deposit address for BTC
-#address = client.get_deposit_address(coin='BTC')
 
 
 def handle_socket_message(msg):
@@ -88,7 +40,10 @@ async def custom_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def result_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f'You have earned/lost {get_wallet_value_difference(client, 0)}')
+    with open('../trade_results.txt', 'r') as file2:
+        # Read the entire contents of the file into a variable
+        file_contents = file2.read()
+    await update.message.reply_text(f'You have earned/lost {file_contents}')
 
 
 def handle_response(text: str) -> str:
@@ -120,23 +75,6 @@ async def error(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f'Update {update} cause error {context.error}')
 
 
-async def main():
-    # initialise the client
-    client = await AsyncClient.create()
-
-    # initialise websocket factory manager
-    bsm = BinanceSocketManager(client)
-
-    # create listener using async with
-    # this will exit and close the connection after 5 messages
-    async with bsm.trade_socket('BTCUSDT') as ts:
-        for _ in range(5):
-            res = await ts.recv()
-            print(f'recv {res}')
-
-    await client.close_connection()
-
-
 if __name__ == "__main__":
     print('Bot starting...')
     # Set up the command and message handlers
@@ -146,6 +84,5 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler('result', result_command))
     app.add_handler(MessageHandler(filters.Text, handle_message))
     app.add_error_handler(error)
-    
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+
+    app.run_polling(1)

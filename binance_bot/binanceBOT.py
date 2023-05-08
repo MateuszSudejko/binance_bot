@@ -1,12 +1,61 @@
-# from binance.enums import KLINE_INTERVAL_1MINUTE
-import decimal
+# from binance_bot.enums import KLINE_INTERVAL_1MINUTE
+from binanceBOT import Client, AsyncClient, BinanceSocketManager  # noqa
+# from binance_bot.depthcache import DepthCacheManager, OptionsDepthCacheManager, ThreadedDepthCacheManager  # noqa
+import asyncio
 from datetime import datetime, timedelta
-from binance import Client, AsyncClient, BinanceSocketManager  # noqa
-# from binance.depthcache import DepthCacheManager, OptionsDepthCacheManager, ThreadedDepthCacheManager  # noqa
-from main import *
 
 
-def get_wallet_value_from_2am(client: Client):
+with open('../keys.txt', 'r') as file:
+    # Read the entire contents of the file into a variable
+    file_contents = file.read()
+    keys = file_contents.split('\n')
+
+
+# Set up the Binance API client
+api_key = keys[2]
+api_secret = keys[3]
+client = Client(api_key=api_key, api_secret=api_secret)
+# wallet_value_2am = get_wallet_value_from_2am(client)
+
+
+# get market depth
+# depth = client.get_order_book(symbol='BNBBTC')
+
+# place a test market buy order, to place an actual order use the create_order function
+# order = client.create_test_order(
+#    symbol='BNBBTC',
+#    side=Client.SIDE_BUY,
+#    type=Client.ORDER_TYPE_MARKET,
+#    quantity=100)
+
+# get all symbol prices
+# prices = client.get_all_tickers()
+
+# withdraw 100 ETH
+# check docs for assumptions around withdrawals
+# from binance_bot.exceptions import BinanceAPIException
+
+# try:
+#    result = client.withdraw(
+#        asset='ETH',
+#        address='<eth_address>',
+#        amount=100)
+# except BinanceAPIException as e:
+#    print(e)
+# else:
+#    print("Success")
+
+# fetch list of withdrawals
+# withdraws = client.get_withdraw_history()
+
+# fetch list of ETH withdrawals
+# eth_withdraws = client.get_withdraw_history(coin='ETH')
+
+# get a deposit address for BTC
+# address = client.get_deposit_address(coin='BTC')
+
+
+def get_wallet_value_from_2am():
     account_info = client.get_account()
     balances = account_info['balances']
     # Get wallet balance at 2AM today
@@ -22,7 +71,7 @@ def get_wallet_value_from_2am(client: Client):
     return wallet_value_2am
 
 
-def get_wallet_value_difference(client, wallet_value_2am):
+def get_wallet_value_difference(wallet_value_2am):
     # Get current wallet balance
     account_info = client.get_account()
     balances = account_info['balances']
@@ -32,7 +81,7 @@ def get_wallet_value_difference(client, wallet_value_2am):
     return difference
 
 
-def close_all_positions(client):
+def close_all_positions():
     # get all open orders
     orders = client.futures_get_all_orders()
 
@@ -53,7 +102,7 @@ def close_all_positions(client):
             continue
 
 
-async def trading_loop(client):
+async def main():
     bm = BinanceSocketManager(client)
     # start any sockets here, i.e a trade socket
     ts = bm.symbol_ticker_futures_socket('BTCUSDT')
@@ -74,3 +123,9 @@ async def trading_loop(client):
                 break
 
     await client.close_connection()
+
+
+if __name__ == "__main__":
+    close_all_positions()
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
