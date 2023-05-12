@@ -1,5 +1,5 @@
 # from binance_bot.enums import KLINE_INTERVAL_1MINUTE
-from binanceBOT import Client, AsyncClient, BinanceSocketManager  # noqa
+from binance import Client, AsyncClient, BinanceSocketManager  # noqa
 # from binance_bot.depthcache import DepthCacheManager, OptionsDepthCacheManager, ThreadedDepthCacheManager  # noqa
 import asyncio
 from datetime import datetime, timedelta
@@ -65,8 +65,7 @@ def get_wallet_value_from_2am():
     klines = client.get_historical_klines('BTCUSDT', Client.KLINE_INTERVAL_1HOUR, f"{timestamp_2am}ms",
                                           f"{timestamp_2am + 1}ms")
     close_price_2am = float(klines[0][4])
-    btc_balance_2am = float(next((b['free'] for b in balances if b['asset'] == 'BTC'), 0)) + float(
-        next((b['locked'] for b in balances if b['asset'] == 'BTC'), 0))
+    btc_balance_2am = float(next((b['free'] for b in balances if b['asset'] == 'BTC'), 0))
     wallet_value_2am = btc_balance_2am * close_price_2am
     return wallet_value_2am
 
@@ -126,6 +125,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    close_all_positions()
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    #close_all_positions()
+    print(client.get_account()['balances'])
+    #loop = asyncio.get_event_loop()
+    #loop.run_until_complete(main())
