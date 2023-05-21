@@ -1,7 +1,7 @@
 # from binance_bot.enums import KLINE_INTERVAL_1MINUTE
 from binance import Client, AsyncClient, BinanceSocketManager  # noqa
 # from binance_bot.depthcache import DepthCacheManager, OptionsDepthCacheManager, ThreadedDepthCacheManager  # noqa
-import asyncio
+# import asyncio
 from datetime import datetime, timedelta
 
 
@@ -189,5 +189,8 @@ async def main():
 
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    print("Balance at 2AM: ", wallet_value_2am)
+    print("Balance now: ", get_current_futures_balance(api_key, api_secret))
+    close_all_positions(api_key, api_secret, 'BTCUSDT')
+    # loop = asyncio.get_event_loop()
+    # loop.run_until_complete(main())
