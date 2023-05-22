@@ -73,8 +73,8 @@ def get_futures_balance_at_2am(api_key: str, api_secret: str):
 
     # Calculate the sum of asset balances in USDT
     total_balance_usdt = 0.0
-    for asset in account_info['balances']:
-        if float(asset['balance']) > 0:
+    for asset in account_info:
+        if 'balance' in asset and float(asset['balance']) > 0:
             # Get the balance at 2am for the specified asset
             asset_balance = float(asset['balance'])
             # Convert balance to USDT
