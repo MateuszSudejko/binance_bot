@@ -1,7 +1,7 @@
 # from binance_bot.enums import KLINE_INTERVAL_1MINUTE
+import asyncio
 from binance import Client, AsyncClient, BinanceSocketManager  # noqa
 # from binance_bot.depthcache import DepthCacheManager, OptionsDepthCacheManager, ThreadedDepthCacheManager  # noqa
-# import asyncio
 from datetime import datetime, timedelta
 
 
@@ -14,7 +14,6 @@ with open('../keys.txt', 'r') as file:
 # Set up the Binance API client
 api_key = keys[2]
 api_secret = keys[3]
-client = AsyncClient(api_key=api_key, api_secret=api_secret)
 
 
 # get market depth
@@ -53,11 +52,18 @@ client = AsyncClient(api_key=api_key, api_secret=api_secret)
 # get a deposit address for BTC
 # address = client.get_deposit_address(coin='BTC')
 
+async def get_whole_pnl(client):
+    position_info = client.futures_position_information()
+    total_pnl = 0.0
 
-def get_futures_balance_at_2am(api_key: str, api_secret: str):
-    # Create a Binance API client
-    client = Client(api_key=api_key, api_secret=api_secret)
+    for position in position_info:
+        pnl = float(position['unRealizedProfit'])
+        total_pnl += pnl
 
+    return total_pnl
+
+
+async def get_futures_balance_at_2am(client):
     # Calculate the timestamp for 2am today
     current_time = datetime.now()
     today_2am = datetime(current_time.year, current_time.month, current_time.day, 2, 0, 0)
@@ -79,27 +85,27 @@ def get_futures_balance_at_2am(api_key: str, api_secret: str):
             asset_balance = float(asset['balance'])
             # Convert balance to USDT
             if asset['asset'] != 'USDT':
-                usdt_ticker = asset['asset'] + 'USDT'
+                usdt_ticker = asset['asset']
                 usdt_price = client.get_avg_price(symbol=usdt_ticker)['price']
                 asset_balance *= float(usdt_price)
             total_balance_usdt += asset_balance
 
-    # Add the PNL of open orders to the total balance
-    open_orders = client.futures_get_open_orders()
-    for order in open_orders:
-        if order['side'] == 'BUY':
-            pnl = float(order['realizedProfit']) + float(order['unrealizedProfit'])
-        else:  # order['side'] == 'SELL'
-            pnl = -float(order['realizedProfit']) + float(order['unrealizedProfit'])
-        total_balance_usdt += pnl
+    # Add the PNL from all positions to the total balance
+    positions = client.futures_position_information()
+    for position in positions:
+        if float(position['positionAmt']) != 0.0:
+            symbol = position['symbol']
+            pnl = float(position['unRealizedProfit'])
+            if symbol != 'USDT':
+                usdt_ticker = symbol
+                usdt_price = client.get_avg_price(symbol=usdt_ticker)['price']
+                pnl *= float(usdt_price)
+            total_balance_usdt += pnl
 
     return total_balance_usdt
 
 
-def get_current_futures_balance(api_key: str, api_secret: str):
-    # Create a Binance API client
-    client = Client(api_key=api_key, api_secret=api_secret)
-
+async def get_current_futures_balance(client):
     # Get the account information
     account_info = client.futures_account()
 
@@ -117,30 +123,34 @@ def get_current_futures_balance(api_key: str, api_secret: str):
             total_balance_usdt += asset_balance
 
     # Add the PNL of open orders to the total balance
-    open_orders = client.futures_get_open_orders()
-    for order in open_orders:
-        if order['side'] == 'BUY':
-            pnl = float(order['realizedProfit']) + float(order['unrealizedProfit'])
-        else:  # order['side'] == 'SELL'
-            pnl = -float(order['realizedProfit']) + float(order['unrealizedProfit'])
-        total_balance_usdt += pnl
+    total_balance_usdt += await get_whole_pnl(client)
 
     return total_balance_usdt
 
 
-def get_wallet_value_difference(wallet_value_2am):
-    return get_current_futures_balance(api_key, api_secret) - wallet_value_2am
+async def get_wallet_value_difference(wallet_value_2am, client):
+    return get_current_futures_balance(client) - wallet_value_2am
 
 
-def close_all_positions(api_key: str, api_secret: str, symbol: str):
-    # Create a Binance API client
-    client = Client(api_key=api_key, api_secret=api_secret)
+async def cancel_all_orders(client):
+    # Get all open orders
+    open_orders = client.futures_get_open_orders()
 
-    # Get open positions for the specified symbol
-    open_positions = client.futures_position_information(symbol=symbol)
+    # Cancel each open order
+    for order in open_orders:
+        symbol = order['symbol']
+        order_id = order['orderId']
+        client.futures_cancel_order(symbol=symbol, orderId=order_id)
+        print(f"Canceled order: {symbol} - Order ID: {order_id}")
+
+
+async def close_all_positions(client):
+    # Get open positions
+    open_positions = client.futures_position_information()
 
     # Close each open position
     for position in open_positions:
+        symbol = position['symbol']
         quantity = float(position['positionAmt'])
         if quantity > 0:
             # Close long position
@@ -150,47 +160,47 @@ def close_all_positions(api_key: str, api_secret: str, symbol: str):
                 type=Client.ORDER_TYPE_MARKET,
                 quantity=abs(quantity)
             )
-        elif quantity < 0:
-            # Close short position
-            client.futures_create_order(
-                symbol=symbol,
-                side=Client.SIDE_BUY,
-                type=Client.ORDER_TYPE_MARKET,
-                quantity=abs(quantity)
-            )
+        # elif quantity < 0:
+        #     # Close short position
+        #     client.futures_create_order(
+        #         symbol=symbol,
+        #         side=Client.SIDE_BUY,
+        #         type=Client.ORDER_TYPE_MARKET,
+        #         quantity=abs(quantity)
+        #     )
 
     print("All open positions have been closed.")
 
 
-wallet_value_2am = get_futures_balance_at_2am(api_key, api_secret)
-
-
 async def main():
-    bm = BinanceSocketManager(client)
-    # start any sockets here, i.e a trade socket
-    ts = bm.symbol_ticker_futures_socket('BTCUSDT')
-    # then start receiving messages
-    async with ts as tscm:
-        while True:
-            res = await tscm.recv()
-            price = res['data']['b']
-            print(price)
-            if float(price) < 27150.0:
-                await client.futures_create_order(
-                    symbol='BTCUSDT',
-                    side=Client.SIDE_SELL,
-                    type=Client.ORDER_TYPE_MARKET,
-                    quantity=0.001
-                )
-                print("doing transaction")
-                break
+    client = Client(api_key=api_key, api_secret=api_secret)
+    wallet_value_2am = await get_futures_balance_at_2am(client)
+    print("Balance at 2AM: ", wallet_value_2am)
+    print("Balance now: ", await get_current_futures_balance(client))
+    await cancel_all_orders(client)
+    await close_all_positions(client)
+    # bm = BinanceSocketManager(client)
+    # # start any sockets here, i.e a trade socket
+    # ts = bm.symbol_ticker_futures_socket('BTCUSDT')
+    # # then start receiving messages
+    # async with ts as tscm:
+    #     while True:
+    #         res = await tscm.recv()
+    #         price = res['data']['b']
+    #         print(price)
+    #         if float(price) < 27150.0:
+    #             await client.futures_create_order(
+    #                 symbol='BTCUSDT',
+    #                 side=Client.SIDE_SELL,
+    #                 type=Client.ORDER_TYPE_MARKET,
+    #                 quantity=0.001
+    #             )
+    #             print("doing transaction")
+    #             break
 
-    await client.close_connection()
+    # await client.close_connection()
 
 
 if __name__ == "__main__":
-    print("Balance at 2AM: ", wallet_value_2am)
-    print("Balance now: ", get_current_futures_balance(api_key, api_secret))
-    close_all_positions(api_key, api_secret, 'BTCUSDT')
-    # loop = asyncio.get_event_loop()
-    # loop.run_until_complete(main())
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
