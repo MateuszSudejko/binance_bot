@@ -4,7 +4,6 @@ from binance import Client, AsyncClient, BinanceSocketManager  # noqa
 # from binance_bot.depthcache import DepthCacheManager, OptionsDepthCacheManager, ThreadedDepthCacheManager  # noqa
 from datetime import datetime, timedelta
 
-
 with open('../keys.txt', 'r') as file:
     # Read the entire contents of the file into a variable
     file_contents = file.read()
@@ -52,18 +51,8 @@ api_secret = keys[3]
 # get a deposit address for BTC
 # address = client.get_deposit_address(coin='BTC')
 
-async def get_whole_pnl(client):
-    position_info = client.futures_position_information()
-    total_pnl = 0.0
 
-    for position in position_info:
-        pnl = float(position['unRealizedProfit'])
-        total_pnl += pnl
-
-    return total_pnl
-
-
-async def get_futures_balance_at_2am(client):
+def get_futures_balance_at_2am(client):
     # Calculate the timestamp for 2am today
     current_time = datetime.now()
     today_2am = datetime(current_time.year, current_time.month, current_time.day, 2, 0, 0)
@@ -76,7 +65,6 @@ async def get_futures_balance_at_2am(client):
 
     # Get the account information at 2am
     account_info = client.futures_account_balance(timestamp=timestamp_2am)
-
     # Calculate the sum of asset balances in USDT
     total_balance_usdt = 0.0
     for asset in account_info:
@@ -85,27 +73,30 @@ async def get_futures_balance_at_2am(client):
             asset_balance = float(asset['balance'])
             # Convert balance to USDT
             if asset['asset'] != 'USDT':
-                usdt_ticker = asset['asset']
+                usdt_ticker = asset['asset'] + 'USDT'
                 usdt_price = client.get_avg_price(symbol=usdt_ticker)['price']
                 asset_balance *= float(usdt_price)
             total_balance_usdt += asset_balance
 
     # Add the PNL from all positions to the total balance
-    positions = client.futures_position_information()
+    positions = client.futures_position_information(timestamp=timestamp_2am)
     for position in positions:
         if float(position['positionAmt']) != 0.0:
             symbol = position['symbol']
             pnl = float(position['unRealizedProfit'])
-            if symbol != 'USDT':
-                usdt_ticker = symbol
-                usdt_price = client.get_avg_price(symbol=usdt_ticker)['price']
-                pnl *= float(usdt_price)
-            total_balance_usdt += pnl
+            position_side = position['positionSide']
+            if position_side != 'BOTH':  # Skip positions with 'BOTH' position side
+                position_side = float(position_side)  # Get the position side (1 for long, -1 for short)
+                if symbol != 'USDT':
+                    usdt_ticker = symbol
+                    usdt_price = client.get_avg_price(symbol=usdt_ticker)
+                    pnl *= float(usdt_price['price']) * position_side  # Apply position side to pnl calculation
+                total_balance_usdt += pnl
 
     return total_balance_usdt
 
 
-async def get_current_futures_balance(client):
+def get_current_futures_balance(client):
     # Get the account information
     account_info = client.futures_account()
 
@@ -118,12 +109,24 @@ async def get_current_futures_balance(client):
             # Convert balance to USDT
             if asset['asset'] != 'USDT':
                 usdt_ticker = asset['asset'] + 'USDT'
-                usdt_price = client.get_avg_price(symbol=usdt_ticker)['price']
-                asset_balance *= float(usdt_price)
+                usdt_price = client.get_avg_price(symbol=usdt_ticker)
+                asset_balance *= float(usdt_price['price'])
             total_balance_usdt += asset_balance
 
-    # Add the PNL of open orders to the total balance
-    total_balance_usdt += await get_whole_pnl(client)
+    # Add the PNL of open positions to the total balance
+    positions = client.futures_position_information()
+    for position in positions:
+        if float(position['positionAmt']) != 0.0:
+            symbol = position['symbol']
+            pnl = float(position['unRealizedProfit'])
+            position_side = position['positionSide']
+            if position_side != 'BOTH':  # Skip positions with 'BOTH' position side
+                position_side = float(position_side)  # Get the position side (1 for long, -1 for short)
+                if symbol != 'USDT':
+                    usdt_ticker = symbol
+                    usdt_price = client.get_avg_price(symbol=usdt_ticker)
+                    pnl *= float(usdt_price['price']) * position_side  # Apply position side to pnl calculation
+                total_balance_usdt += pnl
 
     return total_balance_usdt
 
@@ -158,25 +161,27 @@ async def close_all_positions(client):
                 symbol=symbol,
                 side=Client.SIDE_SELL,
                 type=Client.ORDER_TYPE_MARKET,
-                quantity=abs(quantity)
+                quantity=abs(quantity),
+                reduceOnly=True  # Specify reduceOnly parameter
             )
-        # elif quantity < 0:
-        #     # Close short position
-        #     client.futures_create_order(
-        #         symbol=symbol,
-        #         side=Client.SIDE_BUY,
-        #         type=Client.ORDER_TYPE_MARKET,
-        #         quantity=abs(quantity)
-        #     )
+        elif quantity < 0:
+            # Close short position
+            client.futures_create_order(
+                symbol=symbol,
+                side=Client.SIDE_BUY,
+                type=Client.ORDER_TYPE_MARKET,
+                quantity=abs(quantity),
+                reduceOnly=True  # Specify reduceOnly parameter
+            )
 
     print("All open positions have been closed.")
 
 
 async def main():
     client = Client(api_key=api_key, api_secret=api_secret)
-    wallet_value_2am = await get_futures_balance_at_2am(client)
+    wallet_value_2am = get_futures_balance_at_2am(client)
     print("Balance at 2AM: ", wallet_value_2am)
-    print("Balance now: ", await get_current_futures_balance(client))
+    print("Balance now: ", get_current_futures_balance(client))
     await cancel_all_orders(client)
     await close_all_positions(client)
     # bm = BinanceSocketManager(client)
