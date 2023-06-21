@@ -79,19 +79,19 @@ def get_futures_balance_at_2am(client):
             total_balance_usdt += asset_balance
 
     # Add the PNL from all positions to the total balance
-    positions = client.futures_position_information(timestamp=timestamp_2am)
-    for position in positions:
-        if float(position['positionAmt']) != 0.0:
-            symbol = position['symbol']
-            pnl = float(position['unRealizedProfit'])
-            position_side = position['positionSide']
-            if position_side != 'BOTH':  # Skip positions with 'BOTH' position side
-                position_side = float(position_side)  # Get the position side (1 for long, -1 for short)
-                if symbol != 'USDT':
-                    usdt_ticker = symbol
-                    usdt_price = client.get_avg_price(symbol=usdt_ticker)
-                    pnl *= float(usdt_price['price']) * position_side  # Apply position side to pnl calculation
-                total_balance_usdt += pnl
+    # positions = client.futures_position_information(timestamp=timestamp_2am)
+    # for position in positions:
+    #     if float(position['positionAmt']) != 0.0:
+    #         symbol = position['symbol']
+    #         pnl = float(position['unRealizedProfit'])
+    #         position_side = position['positionSide']
+    #         if position_side != 'BOTH':  # Skip positions with 'BOTH' position side
+    #             position_side = float(position_side)  # Get the position side (1 for long, -1 for short)
+    #             if symbol != 'USDT':
+    #                 usdt_ticker = symbol
+    #                 usdt_price = client.get_avg_price(symbol=usdt_ticker)
+    #                 pnl *= float(usdt_price['price']) * position_side  # Apply position side to pnl calculation
+    #             total_balance_usdt += pnl
 
     return total_balance_usdt
 
