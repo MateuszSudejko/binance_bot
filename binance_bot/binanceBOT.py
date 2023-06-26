@@ -4,6 +4,8 @@ from binance import Client, AsyncClient, BinanceSocketManager  # noqa
 # from binance_bot.depthcache import DepthCacheManager, OptionsDepthCacheManager, ThreadedDepthCacheManager  # noqa
 from datetime import datetime, timedelta
 
+from binance.exceptions import BinanceAPIException
+
 with open('../keys.txt', 'r') as file:
     # Read the entire contents of the file into a variable
     file_contents = file.read()
@@ -14,6 +16,10 @@ with open('../keys.txt', 'r') as file:
 api_key = keys[2]
 api_secret = keys[3]
 
+# settings for simple trading loop
+symbol1 = 'USDTBTC'  # symbol of the order
+quantity1 = 0.001  # quantity to buy/sell
+price1 = 0.0  # condition for a price to create a given order
 
 # get market depth
 # depth = client.get_order_book(symbol='BNBBTC')
@@ -177,33 +183,81 @@ async def close_all_positions(client):
     print("All open positions have been closed.")
 
 
+# 1. funkcja z warunkami sprzedazy/kupna -> 2. wysylanie wiadomosci na telegram o kupnie/sprzedazy -> 3. przygtowanie poczatkowego skryptu dla woo -> 4. twitter api
+
+def create_sell_order(client, symbol, quantity):
+    try:
+        # Check available balance for the trading asset
+        account_info = client.futures_account_balance()
+        for asset in account_info:
+            if asset['asset'] == symbol.split('USDT')[0]:
+                free_balance = float(asset['balance'])
+                if free_balance < quantity:
+                    print("Insufficient funds to create sell order.")
+                    return None
+                break
+
+        order = client.futures_create_order(
+            symbol=symbol,
+            side=Client.SIDE_SELL,
+            type=Client.ORDER_TYPE_MARKET,
+            quantity=quantity
+        )
+        print(f'created sell order for {symbol} in quantity {quantity}')
+        return order
+    except BinanceAPIException as e:
+        print("An error occurred: {}".format(e.message))
+    except Exception as e:
+        print("An exception occurred: {}".format(str(e)))
+
+
+def create_buy_order(client, symbol, quantity):
+    try:
+        # Check available balance for the trading asset
+        account_info = client.futures_account_balance()
+        for asset in account_info:
+            if asset['asset'] == symbol.split('USDT')[0]:
+                free_balance = float(asset['balance'])
+                if free_balance < quantity:
+                    print("Insufficient funds to create buy order.")
+                    return None
+                break
+
+        order = client.futures_create_order(
+            symbol=symbol,
+            side=Client.SIDE_BUY,
+            type=Client.ORDER_TYPE_MARKET,
+            quantity=quantity
+        )
+        print(f'created buy order for {symbol} in quantity {quantity}')
+        return order
+    except BinanceAPIException as e:
+        print("An error occurred: {}".format(e.message))
+    except Exception as e:
+        print("An exception occurred: {}".format(str(e)))
+
+
 async def main():
-    client = Client(api_key=api_key, api_secret=api_secret)
+    client = AsyncClient(api_key=api_key, api_secret=api_secret)
     wallet_value_2am = get_futures_balance_at_2am(client)
     print("Balance at 2AM: ", wallet_value_2am)
     print("Balance now: ", get_current_futures_balance(client))
-    await cancel_all_orders(client)
-    await close_all_positions(client)
-    # bm = BinanceSocketManager(client)
-    # # start any sockets here, i.e a trade socket
-    # ts = bm.symbol_ticker_futures_socket('BTCUSDT')
-    # # then start receiving messages
-    # async with ts as tscm:
-    #     while True:
-    #         res = await tscm.recv()
-    #         price = res['data']['b']
-    #         print(price)
-    #         if float(price) < 27150.0:
-    #             await client.futures_create_order(
-    #                 symbol='BTCUSDT',
-    #                 side=Client.SIDE_SELL,
-    #                 type=Client.ORDER_TYPE_MARKET,
-    #                 quantity=0.001
-    #             )
-    #             print("doing transaction")
-    #             break
+    # await cancel_all_orders(client)
+    # await close_all_positions(client)
+    bm = BinanceSocketManager(client)
+    # start any sockets here, i.e a trade socket
+    ts = bm.symbol_ticker_futures_socket('BTCUSDT')
+    # then start receiving messages
+    async with ts as tscm:
+        while True:
+            res = await tscm.recv()
+            price = res['data']['b']
+            print(price)
+            if float(price) < price1:
+                create_buy_order(client, symbol1, quantity1)
+                break
 
-    # await client.close_connection()
+    await client.close_connection()
 
 
 if __name__ == "__main__":
