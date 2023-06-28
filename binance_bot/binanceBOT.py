@@ -16,6 +16,9 @@ with open('../keys.txt', 'r') as file:
 api_key = keys[2]
 api_secret = keys[3]
 
+# file path for updates for telegram
+file_path = '/home/mateusz/PycharmProjects/binance_bot/send_to_telegram.txt'
+
 # settings for simple trading loop
 symbol1 = 'USDTBTC'  # symbol of the order
 quantity1 = 0.001  # quantity to buy/sell
@@ -204,6 +207,8 @@ def create_sell_order(client, symbol, quantity):
             quantity=quantity
         )
         print(f'created sell order for {symbol} in quantity {quantity}')
+        with open(file_path, 'w') as file:
+            file.write(f'created sell order for {symbol} in quantity {quantity}')
         return order
     except BinanceAPIException as e:
         print("An error occurred: {}".format(e.message))
@@ -230,6 +235,8 @@ def create_buy_order(client, symbol, quantity):
             quantity=quantity
         )
         print(f'created buy order for {symbol} in quantity {quantity}')
+        with open(file_path, 'w') as file:
+            file.write(f'created buy order for {symbol} in quantity {quantity}')
         return order
     except BinanceAPIException as e:
         print("An error occurred: {}".format(e.message))

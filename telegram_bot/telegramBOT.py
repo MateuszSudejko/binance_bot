@@ -1,6 +1,8 @@
 from typing import Final
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes
+import os
+import time
 
 
 with open('../keys.txt', 'r') as file:
@@ -13,6 +15,7 @@ TOKEN: Final = keys[0]
 BOT_USERNAME: Final = keys[1]
 app = Application.builder().token(TOKEN).build()
 user_name = keys[4]
+file_path = '/home/mateusz/PycharmProjects/binance_bot/send_to_telegram.txt'
 
 
 def handle_socket_message(msg):
@@ -39,11 +42,15 @@ async def custom_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text('Custom command')
 
 
-async def result_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    with open('../trade_results.txt', 'r') as file2:
-        # Read the entire contents of the file into a variable
-        file_contents = file2.read()
-    await update.message.reply_text(f'You have earned/lost {file_contents}')
+async def check_file_and_send_message():
+    while True:
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            with open(file_path, 'w+') as file:
+                file_contents = file.read().strip()
+            if file_contents:
+                await app.bot.send_message(chat_id=user_name, text=file_contents)
+                file.truncate()
+        time.sleep(5)  # Check every 5 seconds
 
 
 def handle_response(text: str) -> str:
@@ -52,7 +59,7 @@ def handle_response(text: str) -> str:
     if 'hello' in processed:
         return 'hello'
 
-    return 'I do not have answer to that'
+    return 'I do not have an answer to that'
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -72,7 +79,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def error(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(f'Update {update} cause error {context.error}')
+    print(f'Update {update} caused an error: {context.error}')
 
 
 if __name__ == "__main__":
@@ -81,8 +88,10 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler('start', start_command))
     app.add_handler(CommandHandler('help', help_command))
     app.add_handler(CommandHandler('custom', custom_command))
-    app.add_handler(CommandHandler('result', result_command))
-    app.add_handler(MessageHandler(filters.Text, handle_message))
+    # app.add_handler(MessageHandler(filters.Text, handle_message))
     app.add_error_handler(error)
 
     app.run_polling(1)
+
+    # Start the file checking loop in the background
+    app.loop.create_task(check_file_and_send_message())
