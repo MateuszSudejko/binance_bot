@@ -206,9 +206,10 @@ def create_sell_order(client, symbol, quantity):
             type=Client.ORDER_TYPE_MARKET,
             quantity=quantity
         )
-        print(f'created sell order for {symbol} in quantity {quantity}')
+        price = float(order['avgPrice'])
+        print(f'created sell order for {symbol} in quantity {quantity} at price {price}')
         with open(file_path, 'w') as file:
-            file.write(f'created sell order for {symbol} in quantity {quantity}')
+            file.write(f'created sell order for {symbol} in quantity {quantity} at price {price}')
         return order
     except BinanceAPIException as e:
         print("An error occurred: {}".format(e.message))
@@ -234,9 +235,10 @@ def create_buy_order(client, symbol, quantity):
             type=Client.ORDER_TYPE_MARKET,
             quantity=quantity
         )
-        print(f'created buy order for {symbol} in quantity {quantity}')
+        price = float(order['avgPrice'])
+        print(f'created buy order for {symbol} in quantity {quantity} at price {price}')
         with open(file_path, 'w') as file:
-            file.write(f'created buy order for {symbol} in quantity {quantity}')
+            file.write(f'created buy order for {symbol} in quantity {quantity} at price {price}')
         return order
     except BinanceAPIException as e:
         print("An error occurred: {}".format(e.message))
